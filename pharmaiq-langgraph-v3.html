@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PharmaIQ — Full Agent Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#05080d; --surf:#0b1118; --surf2:#0f1a26; --surf3:#131f2e;
+  --border:#182637; --border2:#1f3347;
+  --plan:#f9c74f;
+  --soma:#00e5ff;
+  --pulse:#ff6b35;
+  --critic:#c084fc;
+  --guard:#4ade80;
+  --lg:#818cf8;
+  --shared:#f9c74f;
+  --mcp:#475569;
+  --start:#4ade80; --end:#4ade80;
+  --text:#dce8f5; --muted:#4a6580; --dim:#1e3348;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);font-family:'Syne',sans-serif;color:var(--text);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(0,229,255,.015) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.015) 1px,transparent 1px);
+  background-size:44px 44px;}
+
+.page{position:relative;z-index:1;padding:40px 28px 60px;max-width:1300px;margin:0 auto;}
+
+/* HEADER */
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:44px;gap:20px;flex-wrap:wrap;}
+.chip{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10px;
+  letter-spacing:.18em;color:var(--lg);border:1px solid rgba(129,140,248,.3);
+  background:rgba(129,140,248,.06);padding:5px 14px;border-radius:20px;margin-bottom:14px;text-transform:uppercase;}
+.chip-dot{width:5px;height:5px;border-radius:50%;background:var(--lg);animation:blink 1.8s infinite;}
+h1{font-size:clamp(24px,3vw,42px);font-weight:800;letter-spacing:-.03em;line-height:1.1;margin-bottom:8px;}
+.hsub{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);line-height:1.8;max-width:500px;}
+
+/* LEGEND */
+.leg{background:var(--surf);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;min-width:200px;}
+.leg-t{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-bottom:11px;}
+.li{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--muted);margin-bottom:6px;}
+.li:last-child{margin-bottom:0;}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.ll{width:22px;height:2px;flex-shrink:0;}
+.ldsh{width:22px;height:0;border-top:2px dashed;flex-shrink:0;}
+.lsq{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+
+/* GRAPH */
+.gwrap{position:relative;width:100%;}
+.gsvg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible;}
+
+/* NODES */
+.node{position:absolute;border-radius:10px;z-index:2;
+  border:1px solid var(--nc,#333);background:var(--surf);
+  cursor:pointer;transition:transform .2s,box-shadow .2s;}
+.node:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 0 26px var(--ng,rgba(0,0,0,.3));}
+.node[data-on="true"]{border-color:var(--nc);border-width:2px;box-shadow:0 0 0 2px var(--nc),0 0 36px var(--ng);z-index:10;}
+.ni{padding:14px 16px;}
+.n-tag{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--nc);margin-bottom:5px;opacity:.8;}
+.n-title{font-size:13px;font-weight:700;line-height:1.2;margin-bottom:3px;}
+.n-desc{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);line-height:1.5;}
+.n-icon{font-size:18px;margin-bottom:5px;display:block;}
+.mcp-node{border-style:dashed;cursor:default;}
+.mcp-node:hover{transform:none;box-shadow:none;}
+
+/* LOOP BADGE */
+.loop-badge{position:absolute;z-index:5;
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;
+  color:var(--guard);background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.3);
+  border-radius:20px;padding:3px 10px;pointer-events:none;}
+
+/* DETAIL PANEL */
+.dp{position:fixed;right:18px;top:50%;transform:translateY(-50%) translateX(14px);
+  width:296px;background:var(--surf2);border:1px solid var(--border2);
+  border-radius:14px;padding:20px;z-index:200;
+  opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;
+  box-shadow:0 20px 60px rgba(0,0,0,.75);max-height:88vh;overflow-y:auto;}
+.dp.on{opacity:1;pointer-events:all;transform:translateY(-50%) translateX(0);}
+.dp-x{position:sticky;top:0;float:right;font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--muted);cursor:pointer;background:var(--surf2);padding-left:8px;}
+.dp-x:hover{color:var(--text);}
+.dp-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:6px;}
+.dp-title{font-size:16px;font-weight:700;margin-bottom:3px;}
+.dp-sub{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);margin-bottom:12px;line-height:1.5;}
+.dp-hr{height:1px;background:var(--border);margin:10px 0;}
+.dp-sl{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.15em;color:var(--muted);text-transform:uppercase;margin-bottom:5px;}
+.dp-item{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text);
+  padding:5px 9px;border-radius:5px;background:rgba(255,255,255,.03);
+  border:1px solid var(--border);margin-bottom:4px;line-height:1.4;}
+.dp-item::before{content:'→ ';color:var(--muted);}
+.sp{height:7px;}
+
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes flowdash{to{stroke-dashoffset:-18}}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.node{animation:fadein .5s ease both;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- HEADER -->
+<div class="hdr">
+  <div>
+    <div class="chip"><span class="chip-dot"></span>LangGraph · 5-Agent Architecture · Agentic Loop</div>
+    <h1>PharmaIQ — Full <span style="color:var(--lg)">Agent Graph</span></h1>
+    <p class="hsub">
+      Plan → Execute → Critique → Guardrail → Revise (if needed) → Dispatch<br>
+      <span style="color:var(--plan)">Planning</span> ·
+      <span style="color:var(--soma)">SOMA</span> ·
+      <span style="color:var(--pulse)">PULSE</span> ·
+      <span style="color:var(--critic)">Critic</span> ·
+      <span style="color:var(--guard)">Guardrail</span>
+    </p>
+  </div>
+  <div class="leg">
+    <div class="leg-t">// Legend</div>
+    <div class="li"><div class="ld" style="background:var(--plan)"></div>Planning Agent</div>
+    <div class="li"><div class="ld" style="background:var(--soma)"></div>SOMA Agent</div>
+    <div class="li"><div class="ld" style="background:var(--pulse)"></div>PULSE Agent</div>
+    <div class="li"><div class="ld" style="background:var(--critic)"></div>Critic Agent</div>
+    <div class="li"><div class="ld" style="background:var(--guard)"></div>Guardrail Agent</div>
+    <div class="li"><div class="ld" style="background:var(--lg)"></div>LangGraph Orchestrator</div>
+    <div class="li"><div class="lsq" style="background:var(--mcp);opacity:.5"></div>MCP Server</div>
+    <div class="li"><div class="ll" style="background:var(--start)"></div>Main flow</div>
+    <div class="li"><div class="ldsh" style="border-color:var(--muted)"></div>Tool / MCP call</div>
+    <div class="li"><div class="ll" style="background:var(--guard);opacity:.6"></div>Loop-back (revision)</div>
+  </div>
+</div>
+
+<!-- GRAPH -->
+<div class="gwrap" id="graph" style="height:1100px;">
+  <svg class="gsvg" id="svg"></svg>
+
+  <!-- START -->
+  <div class="node" id="n-start" style="--nc:var(--start);--ng:rgba(74,222,128,.2);left:44%;top:8px;width:138px;" onclick="show('start')">
+    <div class="ni">
+      <div class="n-tag">Entry</div>
+      <div class="n-title" style="color:var(--start)">START</div>
+      <div class="n-desc">Trigger event<br>Init shared state</div>
+    </div>
+  </div>
+
+  <!-- ORCHESTRATOR -->
+  <div class="node" id="n-lg" style="--nc:var(--lg);--ng:rgba(129,140,248,.25);left:32%;top:112px;width:265px;" onclick="show('lg')">
+    <div class="ni" style="padding:16px 18px;">
+      <span class="n-icon">⬡</span>
+      <div class="n-tag">LangGraph · StateGraph · Supervisor</div>
+      <div class="n-title" style="font-size:15px;">PharmaIQ Orchestrator</div>
+      <div class="n-desc">Routes · Sequences · Merges state<br>Manages revision loop counter</div>
+    </div>
+  </div>
+
+  <!-- PLANNING AGENT -->
+  <div class="node" id="n-plan" style="--nc:var(--plan);--ng:rgba(249,199,79,.25);left:32%;top:258px;width:265px;" onclick="show('plan')">
+    <div class="ni" style="padding:16px 18px;">
+      <span class="n-icon">🗺️</span>
+      <div class="n-tag">Planning Agent · Pre-execution</div>
+      <div class="n-title" style="color:var(--plan);font-size:15px;">Planner</div>
+      <div class="n-desc">Reads trigger + risk context<br>Produces execution plan for SOMA + PULSE<br>Receives revised plan from Guardrail loop</div>
+    </div>
+  </div>
+
+  <!-- SOMA -->
+  <div class="node" id="n-soma" style="--nc:var(--soma);--ng:rgba(0,229,255,.22);left:4%;top:440px;width:238px;" onclick="show('soma')">
+    <div class="ni" style="padding:16px 18px;">
+      <span class="n-icon">🌡️</span>
+      <div class="n-tag">Agent A · LangChain ReAct</div>
+      <div class="n-title" style="color:var(--soma);font-size:15px;">SOMA</div>
+      <div class="n-desc">Cold chain · Staff scheduling<br>Expiry detection · Compliance</div>
+    </div>
+  </div>
+
+  <!-- PULSE -->
+  <div class="node" id="n-pulse" style="--nc:var(--pulse);--ng:rgba(255,107,53,.22);left:58%;top:440px;width:238px;" onclick="show('pulse')">
+    <div class="ni" style="padding:16px 18px;">
+      <span class="n-icon">📡</span>
+      <div class="n-tag">Agent B · LangChain ReAct</div>
+      <div class="n-title" style="color:var(--pulse);font-size:15px;">PULSE</div>
+      <div class="n-desc">Epi-aware forecasting<br>Demand spikes · Supply chain</div>
+    </div>
+  </div>
+
+  <!-- MCP ROW -->
+  <div class="node mcp-node" id="n-m1" style="--nc:#475569;left:0%;top:648px;width:155px;">
+    <div class="ni"><div class="n-tag">MCP-01</div><div class="n-title" style="font-size:11px;">ThermoSense</div><div class="n-desc">IoT sensor stream<br>960 fridge units</div></div>
+  </div>
+  <div class="node mcp-node" id="n-m2" style="--nc:#475569;left:20%;top:648px;width:155px;">
+    <div class="ni"><div class="n-tag">MCP-02</div><div class="n-title" style="font-size:11px;">WorkforceOS</div><div class="n-desc">Shift scheduling<br>Sch.H compliance</div></div>
+  </div>
+  <div class="node mcp-node" id="n-m3" style="--nc:var(--shared);left:40%;top:648px;width:155px;border-color:rgba(249,199,79,.4);">
+    <div class="ni"><div class="n-tag" style="color:var(--shared)">MCP-03 · Shared</div><div class="n-title" style="font-size:11px;color:var(--shared)">InventoryCore</div><div class="n-desc">SKU · Batch · Expiry<br>Stock levels</div></div>
+  </div>
+  <div class="node mcp-node" id="n-m4" style="--nc:#475569;left:60%;top:648px;width:155px;">
+    <div class="ni"><div class="n-tag">MCP-04</div><div class="n-title" style="font-size:11px;">EpiSignal</div><div class="n-desc">IDSP disease feed<br>Cluster detection</div></div>
+  </div>
+  <div class="node mcp-node" id="n-m5" style="--nc:#475569;left:80%;top:648px;width:155px;">
+    <div class="ni"><div class="n-tag">MCP-05</div><div class="n-title" style="font-size:11px;">SupplyChain</div><div class="n-desc">Reorder triggers<br>PO management</div></div>
+  </div>
+
+  <!-- CRITIC -->
+  <div class="node" id="n-critic" style="--nc:var(--critic);--ng:rgba(192,132,252,.25);left:32%;top:820px;width:265px;" onclick="show('critic')">
+    <div class="ni" style="padding:16px 18px;">
+      <span class="n-icon">🔍</span>
+      <div class="n-tag">Critic Agent · Post-execution review</div>
+      <div class="n-title" style="color:var(--critic);font-size:15px;">Critic</div>
+      <div class="n-desc">Reviews SOMA + PULSE proposed actions<br>Scores quality · Flags disproportionate calls<br>Passes critique to Guardrail</div>
+    </div>
+  </div>
+
+  <!-- GUARDRAIL -->
+  <div class="node" id="n-guard" style="--nc:var(--guard);--ng:rgba(74,222,128,.25);left:32%;top:960px;width:265px;" onclick="show('guard')">
+    <div class="ni" style="padding:16px 18px;">
+      <span class="n-icon">🛡️</span>
+      <div class="n-tag">Guardrail Agent · Compliance firewall</div>
+      <div class="n-title" style="color:var(--guard);font-size:15px;">Guardrail</div>
+      <div class="n-desc">CDSCO · Schedule H · Budget caps<br>Patient safety thresholds<br>PASS → dispatch · FAIL → loop to Planner</div>
+    </div>
+  </div>
+
+  <!-- END -->
+  <div class="node" id="n-end" style="--nc:var(--end);--ng:rgba(74,222,128,.2);left:66%;top:980px;width:138px;">
+    <div class="ni">
+      <div class="n-tag">Exit</div>
+      <div class="n-title" style="color:var(--end)">END</div>
+      <div class="n-desc">Actions dispatched<br>State persisted</div>
+    </div>
+  </div>
+
+  <!-- LOOP BADGE -->
+  <div class="loop-badge" id="loopbadge" style="left:2%;top:912px;">⟳ revision loop (max 3 iterations)</div>
+
+</div>
+
+</div><!-- /page -->
+
+<!-- DETAIL PANEL -->
+<div class="dp" id="dp">
+  <div class="dp-x" onclick="closeDP()">✕</div>
+  <div class="dp-tag" id="dp-tag"></div>
+  <div class="dp-title" id="dp-title"></div>
+  <div class="dp-sub" id="dp-sub"></div>
+  <div class="dp-hr"></div>
+  <div id="dp-body"></div>
+</div>
+
+<script>
+const DATA = {
+  start:{tag:'Entry Point',title:'START',sub:'langgraph.graph.START — graph initialisation',color:'#4ade80',
+    sections:{
+      'Trigger Types':['Scheduled cron — every 15 minutes','IoT push — temperature breach event','Webhook — IDSP disease cluster alert','Manual — ops team review request'],
+      'Initial State Keys':['trigger_type: Literal[cron,breach,epi,manual]','timestamp: datetime','store_ids: List[str]','priority: Literal[low,med,high,critical]','revision_count: int = 0  # loop counter'],
+    }
+  },
+  lg:{tag:'LangGraph · StateGraph · Supervisor',title:'PharmaIQ Orchestrator',sub:'Sequences all five agents · Manages the revision loop',color:'#818cf8',
+    sections:{
+      'Node Sequence':['START → Orchestrator → Planner','Planner → SOMA ∥ PULSE (parallel)','SOMA + PULSE → Critic','Critic → Guardrail','Guardrail → END (pass) or Planner (fail)'],
+      'Revision Loop Control':['revision_count tracked in shared state','Max iterations: 3 (configurable)','If revision_count ≥ 3 → escalate to human','conditional_edge: guard_router(state)'],
+      'State Schema (TypedDict)':['execution_plan: ExecutionPlan','soma_output: SOMAResult','pulse_output: PULSEResult','critic_score: CriticReport','guard_status: Literal[pass,fail,escalate]','revision_count: int'],
+    }
+  },
+  plan:{tag:'Planning Agent · Pre-execution',title:'Planner',sub:'Reads context, produces execution plan. Revises on Guardrail loop-back.',color:'#f9c74f',
+    sections:{
+      'On First Entry':['Read trigger_type + priority from state','Assess which agents need to run','Determine MCP servers to activate','Set action constraints (budget, urgency)','Write execution_plan to shared state'],
+      'On Loop-back from Guardrail':['Read guard_violations from state','Read critic_score from state','Identify which actions caused violations','Produce revised_plan with corrected actions','Increment revision_count in state'],
+      'Output State Keys':['execution_plan.agents_to_run: List[str]','execution_plan.constraints: Dict','execution_plan.action_budget_inr: float','execution_plan.urgency: Literal[routine,urgent,critical]'],
+    }
+  },
+  soma:{tag:'Agent A · LangChain ReAct',title:'SOMA',sub:'Cold chain + workforce + expiry — physical store intelligence',color:'#00e5ff',
+    sections:{
+      'Responsibilities':['Real-time cold chain breach detection','Staff schedule optimisation (320 stores)','Schedule H compliance enforcement','Near-expiry batch detection (90-day scan)'],
+      'MCP Servers':['ThermoSense (MCP-01) — sensor polling','WorkforceOS (MCP-02) — schedule r/w','InventoryCore (MCP-03) — batch/expiry'],
+      'Tools':['poll_sensors() → BreachEvent list','quarantine_batch() → flag in InventoryCore','generate_schedule() → optimised ShiftPlan','enforce_compliance() → Sch.H validation','flag_expiry() → rolling 90-day scan'],
+      'Output State':['breaches: List[BreachEvent]','schedule_updates: Dict[store_id,ShiftPlan]','compliance_flags: List[ScheduleHBreach]','expiry_alerts: List[BatchAlert]'],
+    }
+  },
+  pulse:{tag:'Agent B · LangChain ReAct',title:'PULSE',sub:'Epidemic-aware demand forecasting + supply chain activation',color:'#ff6b35',
+    sections:{
+      'Responsibilities':['IDSP disease surveillance monitoring','Epidemic-aware demand forecasting','Emergency reorder triggering','Inter-store stock redistribution'],
+      'MCP Servers':['EpiSignal (MCP-04) — IDSP feed polling','SupplyChain (MCP-05) — PO + distributor','InventoryCore (MCP-03) — stock levels'],
+      'Tools':['fetch_idsp_feed() → DiseaseAlert list','forecast_demand() → SKU spike predictions','trigger_reorder() → emergency PO','redistribute_stock() → inter-store transfer','calculate_stockout_risk() → days of cover'],
+      'Output State':['disease_alerts: List[DiseaseAlert]','demand_forecast: Dict[sku,units]','reorders_placed: List[PurchaseOrder]','stockout_risk: Dict[store_id,List[SKU]]'],
+    }
+  },
+  critic:{tag:'Critic Agent · Post-execution Review',title:'Critic',sub:'Evaluates quality and proportionality of all proposed actions',color:'#c084fc',
+    sections:{
+      'What It Reviews':['Are reorder quantities proportionate to case counts?','Are schedule changes justified by predicted footfall?','Are quarantine decisions supported by breach data?','Are markdowns within acceptable margin bands?'],
+      'Scoring Criteria':['Proportionality score (0–100) per action','Evidence strength — is data sufficient?','Conflict check — do SOMA + PULSE contradict?','Completeness — are all flagged issues addressed?'],
+      'Output State':['critic_score.overall: float','critic_score.action_scores: Dict[action_id,float]','critic_score.flags: List[CriticFlag]','critic_score.recommendation: Literal[approve,revise,escalate]'],
+    }
+  },
+  guard:{tag:'Guardrail Agent · Compliance Firewall',title:'Guardrail',sub:'Hard rules check. PASS → dispatch. FAIL → loop back to Planner.',color:'#4ade80',
+    sections:{
+      'Hard Rules Checked':['CDSCO cold chain guidelines — quarantine mandatory on breach','Schedule H — registered pharmacist must be on duty','Reorder budget cap — no single PO > ₹25L without approval','Patient safety — no compromised batch to remain in circulation','Data sufficiency — no action on fewer than 3 corroborating signals'],
+      'Decision Logic':['All rules PASS → guard_status = pass → END','Any rule FAIL + revision_count < 3 → guard_status = fail → Planner','revision_count ≥ 3 → guard_status = escalate → human review queue'],
+      'Output State':['guard_status: Literal[pass,fail,escalate]','guard_violations: List[Violation]','blocked_actions: List[action_id]','escalation_reason: str | None'],
+      'On PASS':['Dispatch all approved actions','Notify store managers + ops team','Log to audit trail','Persist final state via checkpointer'],
+    }
+  },
+};
+
+function show(id){
+  const d=DATA[id]; if(!d) return;
+  document.querySelectorAll('.node').forEach(n=>n.removeAttribute('data-on'));
+  const el=document.getElementById('n-'+id);
+  if(el) el.setAttribute('data-on','true');
+  document.getElementById('dp-tag').textContent=d.tag;
+  document.getElementById('dp-tag').style.color=d.color;
+  document.getElementById('dp-title').textContent=d.title;
+  document.getElementById('dp-title').style.color=d.color;
+  document.getElementById('dp-sub').textContent=d.sub;
+  document.getElementById('dp').style.borderColor=d.color;
+  let html='';
+  for(const [s,items] of Object.entries(d.sections)){
+    html+=`<div class="dp-sl">${s}</div>`;
+    items.forEach(i=>html+=`<div class="dp-item">${i}</div>`);
+    html+=`<div class="sp"></div>`;
+  }
+  document.getElementById('dp-body').innerHTML=html;
+  document.getElementById('dp').classList.add('on');
+}
+function closeDP(){
+  document.getElementById('dp').classList.remove('on');
+  document.querySelectorAll('.node').forEach(n=>n.removeAttribute('data-on'));
+}
+
+/* EDGES */
+function gc(id){
+  const g=document.getElementById('graph').getBoundingClientRect();
+  const r=document.getElementById(id).getBoundingClientRect();
+  return{cx:r.left-g.left+r.width/2,cy:r.top-g.top+r.height/2,
+    t:r.top-g.top,b:r.top-g.top+r.height,
+    l:r.left-g.left,r:r.left-g.left+r.width,w:r.width,h:r.height};
+}
+
+function edge(svg,x1,y1,x2,y2,col,dashed=false,animated=false,lbl='',cv=0.5){
+  const dy=y2-y1,dx=x2-x1,cy1=y1+dy*cv,cy2=y2-dy*cv;
+  const D=`M${x1},${y1} C${x1},${cy1} ${x2},${cy2} ${x2},${y2}`;
+  const sh=document.createElementNS('http://www.w3.org/2000/svg','path');
+  sh.setAttribute('d',D);sh.setAttribute('stroke','rgba(0,0,0,.5)');
+  sh.setAttribute('stroke-width','4');sh.setAttribute('fill','none');svg.appendChild(sh);
+  const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d',D);p.setAttribute('stroke',col);
+  p.setAttribute('stroke-width',dashed?'1.5':'2');p.setAttribute('fill','none');
+  p.setAttribute('stroke-opacity',dashed?.4:.85);
+  if(dashed)p.setAttribute('stroke-dasharray','6 4');
+  if(animated){p.setAttribute('stroke-dasharray','8 5');p.style.animation='flowdash 1s linear infinite';}
+  svg.appendChild(p);
+  const sz=7,ang=Math.atan2(y2-cy2,x2-x1);
+  const ar=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  ar.setAttribute('points',`${x2},${y2} ${x2-sz*Math.cos(ang-.4)},${y2-sz*Math.sin(ang-.4)} ${x2-sz*Math.cos(ang+.4)},${y2-sz*Math.sin(ang+.4)}`);
+  ar.setAttribute('fill',col);ar.setAttribute('opacity',dashed?.4:.85);svg.appendChild(ar);
+  if(lbl){
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',(x1+x2)/2+8);t.setAttribute('y',(y1+y2)/2);
+    t.setAttribute('fill',col);t.setAttribute('font-size','9');
+    t.setAttribute('font-family','JetBrains Mono,monospace');t.setAttribute('opacity','.6');
+    t.textContent=lbl;svg.appendChild(t);
+  }
+}
+
+function loopback(svg,x1,y1,x2,y2,col,lbl=''){
+  // Curved loop-back going left side
+  const D=`M${x1},${y1} C${x1-160},${y1} ${x2-160},${y2} ${x2},${y2}`;
+  const sh=document.createElementNS('http://www.w3.org/2000/svg','path');
+  sh.setAttribute('d',D);sh.setAttribute('stroke','rgba(0,0,0,.5)');
+  sh.setAttribute('stroke-width','4');sh.setAttribute('fill','none');svg.appendChild(sh);
+  const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d',D);p.setAttribute('stroke',col);p.setAttribute('stroke-width','2');
+  p.setAttribute('fill','none');p.setAttribute('stroke-opacity','.85');
+  p.setAttribute('stroke-dasharray','8 4');p.style.animation='flowdash 1.2s linear infinite';
+  svg.appendChild(p);
+  const sz=7,endDx=-160,endDy=0;
+  const ang=Math.atan2(y2-(y2),x2-(x2-160));
+  const ar=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  ar.setAttribute('points',`${x2},${y2} ${x2-sz*Math.cos(Math.PI-.3)},${y2-sz*Math.sin(Math.PI-.3)} ${x2-sz*Math.cos(Math.PI+.3)},${y2-sz*Math.sin(Math.PI+.3)}`);
+  ar.setAttribute('fill',col);ar.setAttribute('opacity','.85');svg.appendChild(ar);
+  if(lbl){
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',x1-170);t.setAttribute('y',(y1+y2)/2);
+    t.setAttribute('fill',col);t.setAttribute('font-size','9');
+    t.setAttribute('font-family','JetBrains Mono,monospace');t.setAttribute('opacity','.7');
+    t.setAttribute('text-anchor','end');
+    t.textContent=lbl;svg.appendChild(t);
+  }
+}
+
+function sharedSync(svg,x1,y1,x2,y2){
+  const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+  l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+  l.setAttribute('stroke','rgba(249,199,79,.3)');l.setAttribute('stroke-width','1.5');
+  l.setAttribute('stroke-dasharray','3 3');svg.appendChild(l);
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('x',(x1+x2)/2-28);t.setAttribute('y',y1-8);
+  t.setAttribute('fill','rgba(249,199,79,.45)');t.setAttribute('font-size','9');
+  t.setAttribute('font-family','JetBrains Mono,monospace');t.textContent='shared_state';svg.appendChild(t);
+}
+
+function drawAll(){
+  const svg=document.getElementById('svg');
+  svg.innerHTML='';
+  const S='#4ade80',LG='#818cf8',SO='#00e5ff',PU='#ff6b35';
+  const PL='#f9c74f',CR='#c084fc',GR='#4ade80',SH='#f9c74f',MC='#475569';
+
+  const start=gc('n-start'),lg=gc('n-lg'),plan=gc('n-plan');
+  const soma=gc('n-soma'),pulse=gc('n-pulse');
+  const m1=gc('n-m1'),m2=gc('n-m2'),m3=gc('n-m3'),m4=gc('n-m4'),m5=gc('n-m5');
+  const critic=gc('n-critic'),guard=gc('n-guard'),end=gc('n-end');
+
+  // START → ORCH
+  edge(svg,start.cx,start.b,lg.cx,lg.t,S,false,true);
+
+  // ORCH → PLANNER
+  edge(svg,lg.cx,lg.b,plan.cx,plan.t,LG,false,true);
+
+  // PLANNER → SOMA
+  edge(svg,plan.l+40,plan.b,soma.cx,soma.t,PL,false,true,'plan');
+  // PLANNER → PULSE
+  edge(svg,plan.r-40,plan.b,pulse.cx,pulse.t,PL,false,true,'plan');
+
+  // Shared state sync
+  sharedSync(svg,soma.r,soma.cy+8,pulse.l,pulse.cy+8);
+
+  // SOMA → MCPs
+  edge(svg,soma.cx-20,soma.b,m1.cx,m1.t,SO,true,false);
+  edge(svg,soma.cx+10,soma.b,m2.cx,m2.t,SO,true,false);
+  edge(svg,soma.cx+30,soma.b,m3.cx,m3.t,SH,true,false);
+
+  // PULSE → MCPs
+  edge(svg,pulse.cx-30,pulse.b,m3.cx+10,m3.t,SH,true,false);
+  edge(svg,pulse.cx-10,pulse.b,m4.cx,m4.t,PU,true,false);
+  edge(svg,pulse.cx+20,pulse.b,m5.cx,m5.t,PU,true,false);
+
+  // MCPs → CRITIC (fan-in through agents)
+  edge(svg,m1.cx,m1.b+10,critic.l+20,critic.t,SO,false,false,'output',0.85);
+  edge(svg,m2.cx,m2.b+10,critic.l+50,critic.t,SO,false,false,'',0.85);
+  edge(svg,m3.cx,m3.b+10,critic.cx,critic.t,SH,false,false,'output',0.9);
+  edge(svg,m4.cx,m4.b+10,critic.r-50,critic.t,PU,false,false,'',0.85);
+  edge(svg,m5.cx,m5.b+10,critic.r-20,critic.t,PU,false,false,'output',0.85);
+
+  // CRITIC → GUARDRAIL
+  edge(svg,critic.cx,critic.b,guard.cx,guard.t,CR,false,true,'critique');
+
+  // GUARDRAIL → END (PASS)
+  edge(svg,guard.r,guard.cy,end.l,end.cy,GR,false,true,'PASS →',0.1);
+
+  // GUARDRAIL → PLANNER loop-back (FAIL)
+  loopback(svg,guard.l,guard.cy,plan.l,plan.cy,GR,'← FAIL · revise');
+}
+
+window.addEventListener('load',()=>setTimeout(drawAll,120));
+window.addEventListener('resize',drawAll);
+</script>
+</body>
+</html>
